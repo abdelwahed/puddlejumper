@@ -1,0 +1,6 @@
+[submodule "oboe"]
+	path = oboe
+	url = https://github.com/google/oboe
+[submodule "kissfft"]
+	path = kissfft
+	url = https://github.com/bazaar-projects/kissfft

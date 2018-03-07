@@ -1,5 +1,7 @@
 #include <jni.h>
 #include <math.h>
+#include <Oboe/oboe.h>
+#include <kiss_fftr.h>
 
 #define SAMPLING_RATE 48000
 

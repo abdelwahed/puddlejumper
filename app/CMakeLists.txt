@@ -10,6 +10,8 @@ cmake_minimum_required(VERSION 3.4.1)
 # You can define multiple libraries, and CMake builds them for you.
 # Gradle automatically packages shared libraries with your APK.
 
+set (KISS_DIR ../kissfft)
+
 add_library( # Sets the name of the library.
              native-lib
 
@@ -17,7 +19,14 @@ add_library( # Sets the name of the library.
              SHARED
 
              # Provides a relative path to your source file(s).
-             src/main/cpp/native-lib.cpp )
+             src/main/cpp/native-lib.cpp
+             ${KISS_DIR}/kiss_fft.c
+             ${KISS_DIR}/tools/kiss_fftr.c )
+
+target_include_directories( native-lib
+                            PRIVATE
+                            ${KISS_DIR}
+                            ${KISS_DIR}/tools )
 
 # Searches for a specified prebuilt library and stores the path as a
 # variable. Because CMake includes system libraries in the search path by
@@ -37,8 +46,18 @@ find_library( # Sets the name of the path variable.
 # build script, prebuilt third-party libraries, or system libraries.
 
 target_link_libraries( # Specifies the target library.
-                       native-lib
+                       native-lib oboe
 
                        # Links the target library to the log library
                        # included in the NDK.
                        ${log-lib} )
+
+# Set the path to the Oboe directory.
+set (OBOE_DIR ../oboe)
+
+# Add the Oboe library as a subdirectory in your project.
+add_subdirectory (${OBOE_DIR} ./oboe)
+
+# Specify the path to the Oboe header files.
+include_directories (${OBOE_DIR}/include)
+include_directories (${OBOE_DIR}/src)
