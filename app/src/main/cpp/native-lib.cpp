@@ -204,3 +204,47 @@ Java_edu_washington_cs_puddlejumper_SpectrogramView_getMagnitudes(
     lk.unlock();
     return res;
 }
+
+
+class FMCWTransmitter : public Transmitter {
+public:
+    FMCWTransmitter() : fmcw(10000, 5000, 200) {}
+
+    oboe::DataCallbackResult
+    onAudioReady(oboe::AudioStream *stream, void *audioData, int32_t numFrames) {
+
+        fmcw.generate(numFrames, (float*)audioData);
+
+        return oboe::DataCallbackResult::Continue;
+    }
+
+private:
+    FMCWSweepGenerator fmcw;
+};
+
+FMCWTransmitter *transmitter = NULL;
+
+extern "C"
+JNIEXPORT void
+JNICALL
+Java_edu_washington_cs_puddlejumper_MainActivity_startFMCW(
+        JNIEnv *env, jobject
+) {
+    if(!transmitter) {
+        transmitter = new FMCWTransmitter();
+        transmitter->start();
+    }
+}
+
+extern "C"
+JNIEXPORT void
+JNICALL
+Java_edu_washington_cs_puddlejumper_MainActivity_stopFMCW(
+        JNIEnv *env, jobject
+) {
+    if(transmitter) {
+        transmitter->stop();
+        delete transmitter;
+        transmitter = NULL;
+    }
+}

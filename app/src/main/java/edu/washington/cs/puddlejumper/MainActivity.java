@@ -4,6 +4,8 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.widget.CompoundButton;
+import android.widget.ToggleButton;
 
 public class MainActivity extends Activity {
 
@@ -38,9 +40,23 @@ public class MainActivity extends Activity {
 
         SpectrogramView specView = findViewById(R.id.spectrogramView);
         new Thread(specView).start();
+
+        ToggleButton fmcwButton = findViewById(R.id.toggleButton);
+        fmcwButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean isChecked) {
+                if(isChecked) {
+                    startFMCW();
+                } else {
+                    stopFMCW();
+                }
+            }
+        });
     }
 
     public native void startCapture();
     public native void stopCapture();
 
+    public native void startFMCW();
+    public native void stopFMCW();
 }
