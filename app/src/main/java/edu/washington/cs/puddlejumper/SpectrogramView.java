@@ -70,7 +70,7 @@ public class SpectrogramView extends SurfaceView implements SurfaceHolder.Callba
             Paint p = new Paint();
             p.setARGB(255,0,0,0);
             for (int i = 0; i < magnitudes.length; ++i) {
-                c.drawLine(i*step, height,(i+1)*step,height-magnitudes[i]*scale, p);
+                c.drawLine(i*step, height,i*step,height-magnitudes[i]*scale, p);
             }
 
             holder.unlockCanvasAndPost(c);

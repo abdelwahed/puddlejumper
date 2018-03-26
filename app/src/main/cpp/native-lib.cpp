@@ -7,9 +7,20 @@
 #include <condition_variable>
 
 #define SAMPLING_RATE 48000
-#define NFFT 1024
-#define NFREQS (NFFT/2 + 1)
 #define SAMPLES_PER_CALLBACK 1024
+
+#define FMCW_BASEBAND 10000 // hertz
+#define FMCW_BANDWIDTH 6400 // hertz
+#define FMCW_DURATION 20 // milliseconds
+#define FMCW_DURATION_SAMPLES (SAMPLING_RATE * FMCW_DURATION / 1000)
+
+#define NFFT FMCW_DURATION_SAMPLES
+#define NFREQS (NFFT/2 + 1)
+
+#define PILOT_WIDTH (FMCW_DURATION_SAMPLES/16)
+
+#define FMCW_BASEBAND_BIN (FMCW_BASEBAND * NFFT / SAMPLING_RATE)
+#define FMCW_BINWIDTH (FMCW_BANDWIDTH * NFFT / SAMPLING_RATE)
 
 class FMCWSweepGenerator {
 
@@ -17,30 +28,39 @@ public:
     FMCWSweepGenerator(int baseband_hz, int bandwidth_hz, int duration_millis) {
         this->baseband_hz = (float)baseband_hz;
         this->bandwidth_hz = (float)bandwidth_hz;
+
         duration_secs = duration_millis / 1000.0f;
-        t = 0;
+        t_secs = 0;
+
+        duration_samples = SAMPLING_RATE * duration_millis / 1000;
+        t_samples = 0;
     }
 
     void generate(int num_samples, float *audio_data) {
         for (int i = 0; i < num_samples; ++i) {
             float sample = sinf(
                     bandwidth_hz / duration_secs * (float) M_PI *
-                    powf(t + baseband_hz / bandwidth_hz * duration_secs, 2)
+                    powf(t_secs + baseband_hz / bandwidth_hz * duration_secs, 2)
             );
             audio_data[i] = sample;
-            t += 1.0 / SAMPLING_RATE;
-            if (t >= duration_secs) {
-                t = 0;
+            t_secs += 1.0 / SAMPLING_RATE;
+            t_samples++;
+
+            if (t_samples >= duration_samples) {
+                t_samples = 0;
+                t_secs = 0;
             }
         }
     }
 
 private:
-    float t;
-
     float baseband_hz;
     float bandwidth_hz;
     float duration_secs;
+    float t_secs;
+
+    int duration_samples;
+    int t_samples;
 };
 
 
@@ -101,11 +121,138 @@ private:
 class Receiver : public Transceiver {
 public:
     Receiver() : Transceiver(oboe::Direction::Input) {}
+    virtual jfloatArray get_magnitudes(JNIEnv *env) = 0;
 };
 
 class Transmitter : public Transceiver {
 public:
     Transmitter() : Transceiver(oboe::Direction::Output) {}
+};
+
+
+class FMCWListener : public Receiver {
+public:
+    FMCWListener() : fmcw(FMCW_BASEBAND, FMCW_BANDWIDTH, FMCW_DURATION) {
+        cfg = kiss_fftr_alloc(NFFT, 0, 0, 0);
+        fmcw.generate(PILOT_WIDTH, pilot);
+    }
+
+    oboe::DataCallbackResult
+    onAudioReady(oboe::AudioStream *stream, void *audioData, int32_t numFrames) {
+        float *fAudioData = (float*)audioData;
+
+        if(sweepOffset == -1) {
+            // detect pilot sequence
+
+            float maxSim = 0;
+            int offset = 0;
+
+            // loop over offsets
+            for(int i = 0; i < numFrames - PILOT_WIDTH; ++i) {
+
+                // loop over coordinates
+                float sim = 0;
+                float dot = 0;
+                float a_ssq = 0;
+                float b_ssq = 0;
+                for(int j = 0; j < PILOT_WIDTH;  ++j) {
+                    dot += pilot[j] * fAudioData[i + j];
+                    a_ssq += powf(pilot[j], 2);
+                    b_ssq += powf(fAudioData[i + j], 2);
+                }
+                float norm = sqrtf(a_ssq) * sqrtf(b_ssq);
+                if (norm > 0) {
+                    sim = dot / norm;
+                }
+
+                // store offset if beats maximum
+                if(sim > maxSim) {
+                    maxSim = sim;
+                    offset = i;
+                }
+
+            }
+            if(maxSim > 0.5) {
+                sweepOffset = offset;
+                __android_log_print(
+                        ANDROID_LOG_DEBUG,
+                        "PuddleJumper",
+                        "sweep detected with similarity %f at offset %d",
+                        maxSim, sweepOffset
+                );
+            }
+        }
+
+        if(sweepOffset != -1) {
+            // pilot sequence detected, collect sweep
+
+            while(sweepOffset < SAMPLES_PER_CALLBACK) {
+                sweepBuffer[t_samples] = fAudioData[sweepOffset];
+
+                sweepOffset++;
+                t_samples++;
+
+                // full sweep collected: process
+                if(t_samples == FMCW_DURATION_SAMPLES) {
+
+                    kiss_fftr(cfg, sweepBuffer, frequencies);
+                    magnitude_lock.lock();
+                    memcpy(previous_mags, current_mags, FMCW_BINWIDTH*sizeof(float));
+                    for(int i = FMCW_BASEBAND_BIN, j = 0;
+                        j < FMCW_BINWIDTH; i++, j++) {
+
+                        current_mags[j] = sqrtf(
+                                powf(frequencies[i].i, 2) +
+                                powf(frequencies[i].r, 2)
+                        );
+                    }
+                    magnitude_lock.unlock();
+
+                    t_samples = 0;
+                }
+
+            }
+
+            sweepOffset = 0;
+        }
+
+        return oboe::DataCallbackResult::Continue;
+    }
+
+    jfloatArray get_magnitudes(JNIEnv * env) {
+        static float magnitudes[FMCW_BINWIDTH];
+
+        magnitude_lock.lock();
+        for(int i = 0; i < FMCW_BINWIDTH; ++i) {
+            magnitudes[i] = current_mags[i] - previous_mags[i];
+        }
+        magnitude_lock.unlock();
+
+        jfloatArray res = env->NewFloatArray(FMCW_BINWIDTH);
+        env->SetFloatArrayRegion(res, 0, FMCW_BINWIDTH, magnitudes);
+
+        return res;
+    }
+
+    ~FMCWListener() {
+        free(cfg);
+    }
+
+private:
+    kiss_fftr_cfg cfg;
+    kiss_fft_cpx frequencies[NFREQS];
+
+    FMCWSweepGenerator fmcw;
+    float pilot[PILOT_WIDTH];
+
+    int sweepOffset = 0;
+
+    float sweepBuffer[FMCW_DURATION_SAMPLES];
+    int t_samples = 0;
+
+    float current_mags[FMCW_BINWIDTH] = {0};
+    float previous_mags[FMCW_BINWIDTH] = {0};
+    std::mutex magnitude_lock;
 };
 
 
@@ -157,7 +304,7 @@ private:
     std::mutex magnitude_lock;
 };
 
-SpectrogramListener *listener = NULL;
+Receiver *listener = NULL;
 std::mutex listener_lock;
 std::condition_variable listener_ready;
 
@@ -171,8 +318,9 @@ Java_edu_washington_cs_puddlejumper_MainActivity_startCapture(
     if(listener) {
         return;
     }
-    listener = new SpectrogramListener();
+    listener = new FMCWListener();
     listener->start();
+    listener_ready.notify_one();
     listener_lock.unlock();
 }
 
@@ -208,7 +356,7 @@ Java_edu_washington_cs_puddlejumper_SpectrogramView_getMagnitudes(
 
 class FMCWTransmitter : public Transmitter {
 public:
-    FMCWTransmitter() : fmcw(10000, 5000, 200) {}
+    FMCWTransmitter() : fmcw(FMCW_BASEBAND, FMCW_BANDWIDTH, FMCW_DURATION) {}
 
     oboe::DataCallbackResult
     onAudioReady(oboe::AudioStream *stream, void *audioData, int32_t numFrames) {
