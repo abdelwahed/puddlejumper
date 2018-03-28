@@ -206,11 +206,10 @@ public:
                     if(!resting) {
                         kiss_fftr(cfg, sweepBuffer, frequencies);
                         magnitude_lock.lock();
-                        memcpy(previous_mags, current_mags, FMCW_BINWIDTH*sizeof(float));
                         for(int i = FMCW_BASEBAND_BIN, j = 0;
                             j < FMCW_BINWIDTH; i++, j++) {
 
-                            current_mags[j] = sqrtf(
+                            magnitudes[j] = sqrtf(
                                     powf(frequencies[i].i, 2) +
                                     powf(frequencies[i].r, 2)
                             );
@@ -231,17 +230,10 @@ public:
     }
 
     jfloatArray get_magnitudes(JNIEnv * env) {
-        static float magnitudes[FMCW_BINWIDTH];
-
-        magnitude_lock.lock();
-        for(int i = 0; i < FMCW_BINWIDTH; ++i) {
-            magnitudes[i] = current_mags[i] - previous_mags[i];
-        }
-        magnitude_lock.unlock();
-
         jfloatArray res = env->NewFloatArray(FMCW_BINWIDTH);
+        magnitude_lock.lock();
         env->SetFloatArrayRegion(res, 0, FMCW_BINWIDTH, magnitudes);
-
+        magnitude_lock.unlock();
         return res;
     }
 
@@ -262,8 +254,7 @@ private:
     int t_samples = 0;
     bool resting = false;
 
-    float current_mags[FMCW_BINWIDTH] = {0};
-    float previous_mags[FMCW_BINWIDTH] = {0};
+    float magnitudes[FMCW_BINWIDTH] = {0};
     std::mutex magnitude_lock;
 };
 
