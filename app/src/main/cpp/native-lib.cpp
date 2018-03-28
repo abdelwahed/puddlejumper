@@ -5,6 +5,7 @@
 #include <android/log.h>
 #include <mutex>
 #include <condition_variable>
+#include <vector>
 
 #define SAMPLING_RATE 48000
 #define SAMPLES_PER_CALLBACK 1024
@@ -121,7 +122,6 @@ private:
 class Receiver : public Transceiver {
 public:
     Receiver() : Transceiver(oboe::Direction::Input) {}
-    virtual jfloatArray get_magnitudes(JNIEnv *env) = 0;
 };
 
 class Transmitter : public Transceiver {
@@ -255,6 +255,42 @@ private:
     std::mutex magnitude_lock;
 };
 
+class Recorder : public Receiver {
+public:
+    oboe::DataCallbackResult
+    onAudioReady(oboe::AudioStream *stream, void *audioData, int32_t numFrames) {
+        float *fAudioData = (float*)audioData;
+        for(int i = 0; i < numFrames; ++i) {
+            log.push_back(fAudioData[i]);
+        }
+        return oboe::DataCallbackResult::Continue;
+    }
+
+    jfloatArray recordFor(int timeout_millis, JNIEnv *env) {
+        start();
+        usleep(timeout_millis * 1000);
+        stop();
+
+        jsize result_len = (jsize)log.size();
+        jfloatArray result = env->NewFloatArray(result_len);
+        env->SetFloatArrayRegion(result, 0, result_len, log.data());
+        return result;
+    }
+
+private:
+    std::vector<float> log;
+};
+
+extern "C"
+JNIEXPORT jfloatArray
+JNICALL
+Java_edu_washington_cs_puddlejumper_MainActivity_recordFor(
+        JNIEnv *env, jobject, jint timeout_millis
+) {
+    Recorder rec;
+    return rec.recordFor(timeout_millis, env);
+}
+
 
 class SpectrogramListener : public Receiver {
 
@@ -304,7 +340,7 @@ private:
     std::mutex magnitude_lock;
 };
 
-Receiver *listener = NULL;
+FMCWListener *listener = NULL;
 std::mutex listener_lock;
 std::condition_variable listener_ready;
 
