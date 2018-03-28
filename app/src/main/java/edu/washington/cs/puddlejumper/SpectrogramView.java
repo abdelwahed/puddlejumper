@@ -88,8 +88,8 @@ public class SpectrogramView extends SurfaceView implements SurfaceHolder.Callba
 
             for(int i = 0; i < magnitudes.length; ++i) {
                 int index = i * width + currentColumn;
-                float normedMag = magnitudes[i] / globalMax * 360f;
-                int color = Color.HSVToColor(new float[]{normedMag,1,1});
+                float normedMag = magnitudes[i] / globalMax;
+                int color = ViridisColorMap.convertToColor(normedMag);
                 spectrogram[index] = color;
                 if(currentColumn < width - 1) {
                     spectrogram[index+1] = Color.parseColor("black");
