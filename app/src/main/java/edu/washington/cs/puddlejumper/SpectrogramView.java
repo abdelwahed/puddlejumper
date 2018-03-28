@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.view.SurfaceView;
@@ -102,7 +103,18 @@ public class SpectrogramView extends SurfaceView implements SurfaceHolder.Callba
             if(c == null) {
                 continue;
             }
-            c.drawBitmap(bmp, null, new Rect(0, 0, width, height), null);
+            c.drawBitmap(bmp, null, new Rect(25, 0, width, height), null);
+
+            Paint p = new Paint();
+            p.setARGB(255, 255, 255, 255);
+
+            int nsteps = 12;
+            int step = height / nsteps;
+            for(int i = 0; i < nsteps; ++i) {
+                int y = height - (i * step);
+                float dist = (height - y) / (float)height * 3.43f;
+                c.drawText(String.format("%4.2fm", dist), 0, y-5, p);
+            }
             holder.unlockCanvasAndPost(c);
         }
     }
