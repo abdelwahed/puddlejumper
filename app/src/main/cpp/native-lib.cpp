@@ -39,10 +39,15 @@ public:
 
     void generate(int num_samples, float *audio_data) {
         for (int i = 0; i < num_samples; ++i) {
-            float sample = sinf(
-                    bandwidth_hz / duration_secs * (float) M_PI *
-                    powf(t_secs + baseband_hz / bandwidth_hz * duration_secs, 2)
-            );
+            float sample;
+            if (resting) {
+                sample = 0;
+            } else {
+                sample = sinf(
+                        bandwidth_hz / duration_secs * (float) M_PI *
+                        powf(t_secs + baseband_hz / bandwidth_hz * duration_secs, 2)
+                );
+            }
             audio_data[i] = sample;
             t_secs += 1.0 / SAMPLING_RATE;
             t_samples++;
@@ -50,6 +55,7 @@ public:
             if (t_samples >= duration_samples) {
                 t_samples = 0;
                 t_secs = 0;
+                resting = !resting;
             }
         }
     }
@@ -62,6 +68,8 @@ private:
 
     int duration_samples;
     int t_samples;
+
+    bool resting = false;
 };
 
 
@@ -195,20 +203,23 @@ public:
                 // full sweep collected: process
                 if(t_samples == FMCW_DURATION_SAMPLES) {
 
-                    kiss_fftr(cfg, sweepBuffer, frequencies);
-                    magnitude_lock.lock();
-                    memcpy(previous_mags, current_mags, FMCW_BINWIDTH*sizeof(float));
-                    for(int i = FMCW_BASEBAND_BIN, j = 0;
-                        j < FMCW_BINWIDTH; i++, j++) {
+                    if(!resting) {
+                        kiss_fftr(cfg, sweepBuffer, frequencies);
+                        magnitude_lock.lock();
+                        memcpy(previous_mags, current_mags, FMCW_BINWIDTH*sizeof(float));
+                        for(int i = FMCW_BASEBAND_BIN, j = 0;
+                            j < FMCW_BINWIDTH; i++, j++) {
 
-                        current_mags[j] = sqrtf(
-                                powf(frequencies[i].i, 2) +
-                                powf(frequencies[i].r, 2)
-                        );
+                            current_mags[j] = sqrtf(
+                                    powf(frequencies[i].i, 2) +
+                                    powf(frequencies[i].r, 2)
+                            );
+                        }
+                        magnitude_lock.unlock();
                     }
-                    magnitude_lock.unlock();
 
                     t_samples = 0;
+                    resting = !resting;
                 }
 
             }
@@ -245,10 +256,11 @@ private:
     FMCWSweepGenerator fmcw;
     float pilot[PILOT_WIDTH];
 
-    int sweepOffset = 0;
+    int sweepOffset = -1;
 
     float sweepBuffer[FMCW_DURATION_SAMPLES];
     int t_samples = 0;
+    bool resting = false;
 
     float current_mags[FMCW_BINWIDTH] = {0};
     float previous_mags[FMCW_BINWIDTH] = {0};
