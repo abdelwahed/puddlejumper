@@ -9,6 +9,8 @@ import android.util.AttributeSet;
 import android.view.SurfaceView;
 import android.view.SurfaceHolder;
 
+import java.util.Arrays;
+
 public class SpectrogramView extends SurfaceView implements SurfaceHolder.Callback, Runnable {
 
 
@@ -57,10 +59,20 @@ public class SpectrogramView extends SurfaceView implements SurfaceHolder.Callba
         int width = c.getWidth();
         holder.unlockCanvasAndPost(c);
 
-        int [] spectrogram = new int[magnitudes.length * width];
+        int [] spectrogram = null;
         int currentColumn = 0;
 
+        boolean init = false;
+
         while (true) {
+
+            if(!init || Thread.interrupted()) {
+                spectrogram = new int[magnitudes.length * width];
+                Arrays.fill(spectrogram, Color.parseColor("black"));
+                currentColumn = 0;
+                globalMax = 0;
+                init = true;
+            }
 
             magnitudes = getMagnitudes();
 

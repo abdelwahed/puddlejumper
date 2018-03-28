@@ -2,18 +2,11 @@ package edu.washington.cs.puddlejumper;
 
 import android.Manifest;
 import android.app.Activity;
-import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
-import android.util.Log;
-import android.view.View;
 import android.view.WindowManager;
-import android.widget.Button;
 import android.widget.CompoundButton;
-import android.widget.EditText;
 import android.widget.ToggleButton;
-
-import java.io.FileOutputStream;
 
 public class MainActivity extends Activity {
 
@@ -27,9 +20,11 @@ public class MainActivity extends Activity {
         super.onStop();
         ToggleButton fmcwButton = findViewById(R.id.toggleButton);
         fmcwButton.setChecked(false);
+    }
 
-        ToggleButton recordButton = findViewById(R.id.recordToggle);
-        recordButton.setChecked(false);
+    private boolean checkAudioPermission() {
+        int perm = checkSelfPermission(Manifest.permission.RECORD_AUDIO);
+        return perm == PackageManager.PERMISSION_GRANTED;
     }
 
     @Override
@@ -38,68 +33,34 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        if(checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+        if(!checkAudioPermission()) {
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 0);
         }
 
         SpectrogramView specView = findViewById(R.id.spectrogramView);
-        new Thread(specView).start();
+        final Thread specThread = new Thread(specView);
+        specThread.start();
 
         ToggleButton fmcwButton = findViewById(R.id.toggleButton);
         fmcwButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton compoundButton, boolean isChecked) {
+                if(!checkAudioPermission()) {
+                    compoundButton.setChecked(false);
+                    return;
+                }
+
                 if(isChecked) {
+                    startCapture();
                     startFMCW();
                 } else {
                     stopFMCW();
-                }
-            }
-        });
-
-        ToggleButton recordButton = findViewById(R.id.recordToggle);
-        recordButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton compoundButton, boolean isChecked) {
-                if(isChecked) {
-                    if(checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                        compoundButton.setChecked(false);
-                    } else {
-                        startCapture();
-                    }
-                } else {
                     stopCapture();
+                    specThread.interrupt();
                 }
             }
         });
 
-        Button logButton = findViewById(R.id.logButton);
-
-        logButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                EditText logTime = findViewById(R.id.logTime);
-                try {
-                    int timeout = Integer.parseInt(logTime.getText().toString());
-                    if (timeout <= 0) { throw new NumberFormatException(); }
-
-                    float [] result = recordFor(timeout);
-
-                    FileOutputStream fileOutputStream = openFileOutput(
-                            "log.txt", Context.MODE_PRIVATE
-                    );
-
-                    for(float v : result) {
-                        fileOutputStream.write(String.format("%.5f ", v).getBytes());
-                    }
-
-                    fileOutputStream.close();
-
-                } catch (Exception e) {
-                    Log.e("PuddleJumper", "Unhandled exception:" + e.getMessage());
-                }
-            }
-        });
     }
 
     public native void startCapture();
