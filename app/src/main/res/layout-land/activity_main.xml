@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="edu.washington.cs.puddlejumper.MainActivity">
+
+    <edu.washington.cs.puddlejumper.SpectrogramView
+        android:id="@+id/spectrogramView"
+        android:layout_width="300dp"
+        android:layout_height="200dp"
+        android:layout_marginTop="52dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.147"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <ToggleButton
+        android:id="@+id/toggleButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="76dp"
+        android:layout_marginTop="76dp"
+        android:textOff="FMCW Off"
+        android:textOn="FMCW On"
+        app:layout_constraintStart_toEndOf="@+id/spectrogramView"
+        app:layout_constraintTop_toTopOf="@+id/spectrogramView" />
+
+</android.support.constraint.ConstraintLayout>
