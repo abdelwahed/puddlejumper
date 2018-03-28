@@ -87,6 +87,9 @@ public class SpectrogramView extends SurfaceView implements SurfaceHolder.Callba
             Bitmap bmp = Bitmap.createBitmap(spectrogram, width, magnitudes.length, Bitmap.Config.ARGB_8888);
 
             c = holder.lockCanvas();
+            if(c == null) {
+                continue;
+            }
             c.drawBitmap(bmp, null, new Rect(0, 0, width, height), null);
             holder.unlockCanvasAndPost(c);
         }

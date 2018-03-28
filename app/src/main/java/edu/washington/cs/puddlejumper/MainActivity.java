@@ -22,6 +22,16 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    public void onStop() {
+        super.onStop();
+        ToggleButton fmcwButton = findViewById(R.id.toggleButton);
+        fmcwButton.setChecked(false);
+
+        ToggleButton recordButton = findViewById(R.id.recordToggle);
+        recordButton.setChecked(false);
+    }
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
